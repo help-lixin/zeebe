@@ -9,11 +9,14 @@ package io.camunda.zeebe.test.util.netty;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
@@ -142,10 +145,22 @@ public final class NettySslClient {
     @Override
     protected void initChannel(final SocketChannel channel) {
       final var sslHandler = sslContext.newHandler(channel.alloc());
-      channel.pipeline().addLast("tls", sslHandler);
       sslHandler
           .handshakeFuture()
           .addListener(onHandshake -> extractCertificate(sslHandler, onHandshake));
+
+      channel.pipeline().addLast("tls", sslHandler);
+      channel
+          .pipeline()
+          .addLast(
+              new LoggingHandler(LogLevel.INFO) {
+                @Override
+                public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause)
+                    throws Exception {
+                  extractedCertificate.completeExceptionally(cause);
+                  super.exceptionCaught(ctx, cause);
+                }
+              });
     }
 
     private void extractCertificate(
