@@ -122,8 +122,7 @@ public final class NettySslClient {
     certificates.completeExceptionally(getErrorWithOptionalCause(onClose, errorMessage));
   }
 
-  private Throwable getErrorWithOptionalCause(
-      final Future<? super Void> onClose, final String errorMessage) {
+  private Throwable getErrorWithOptionalCause(final Future<?> onClose, final String errorMessage) {
     final Throwable error;
     if (onClose.cause() != null) {
       error = new IllegalStateException(errorMessage, onClose.cause());
@@ -154,6 +153,9 @@ public final class NettySslClient {
         throws SSLPeerUnverifiedException {
       if (onHandshake.isSuccess()) {
         extractedCertificate.complete(sslHandler.engine().getSession().getPeerCertificates());
+      } else {
+        extractedCertificate.completeExceptionally(
+            getErrorWithOptionalCause(onHandshake, "Failed to perform SSL handshake"));
       }
     }
   }
