@@ -170,6 +170,13 @@ public final class NettySslClient {
               });
     }
 
+    @Override
+    public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause)
+        throws Exception {
+      extractedCertificate.completeExceptionally(cause);
+      super.exceptionCaught(ctx, cause);
+    }
+
     private void onSslClose(final Future<? super Channel> onSslClose) {
       if (!onSslClose.isSuccess()) {
         extractedCertificate.completeExceptionally(
