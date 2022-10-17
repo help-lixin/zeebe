@@ -8,9 +8,13 @@
 package io.camunda.zeebe.test.util;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import org.agrona.CloseHelper;
 import org.junit.After;
 import org.junit.rules.ExternalResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Saves you some {@link After} methods by closing {@link AutoCloseable} implementations after the
@@ -19,6 +23,7 @@ import org.junit.rules.ExternalResource;
  * @author Lindhauer
  */
 public final class AutoCloseableRule extends ExternalResource {
+  private static final Logger LOGGER = LoggerFactory.getLogger(AutoCloseableRule.class);
 
   final List<AutoCloseable> thingsToClose = new ArrayList<>();
 
@@ -28,13 +33,8 @@ public final class AutoCloseableRule extends ExternalResource {
 
   @Override
   public void after() {
-    final int size = thingsToClose.size();
-    for (int i = size - 1; i >= 0; i--) {
-      try {
-        thingsToClose.remove(i).close();
-      } catch (final Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+    Collections.reverse(thingsToClose);
+    CloseHelper.closeAll(
+        error -> LOGGER.error("Failed to close managed AutoCloseable", error), thingsToClose);
   }
 }
