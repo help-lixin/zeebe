@@ -18,6 +18,11 @@ import io.zeebe.containers.ZeebeNode;
 import io.zeebe.containers.cluster.ZeebeCluster;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
+import org.agrona.CloseHelper;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.Logger;
@@ -49,6 +54,17 @@ final class SecureClusteredMessagingIT {
   @SuppressWarnings("unused")
   @RegisterExtension
   final ContainerLogsDumper logsWatcher = new ContainerLogsDumper(cluster::getNodes, LOGGER);
+
+  @BeforeEach
+  void beforeEach() {
+    Configurator.setLevel("io.netty", Level.TRACE);
+  }
+
+  @AfterEach
+  void afterEach() {
+    CloseHelper.quietCloseAll(network);
+    Configurator.setLevel("io.netty", Level.INFO);
+  }
 
   @Test
   void shouldFormAClusterWithTls() {
