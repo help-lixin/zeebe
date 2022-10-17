@@ -137,7 +137,7 @@ public final class NettySslClient {
                 + "extracted",
             address);
     certificates.completeExceptionally(getErrorWithOptionalCause(onClose, errorMessage));
-    LOGGER.trace("Channel to {} closed", address, onClose.cause());
+    LOGGER.debug("Channel to {} closed", address, onClose.cause());
   }
 
   private Throwable getErrorWithOptionalCause(
@@ -199,10 +199,10 @@ public final class NettySslClient {
         final SslHandler sslHandler, final Future<? super Channel> onHandshake)
         throws SSLPeerUnverifiedException {
       if (onHandshake.isSuccess()) {
-        LOGGER.trace("SSL handshake successfully completed");
+        LOGGER.debug("SSL handshake successfully completed");
         extractedCertificate.complete(sslHandler.engine().getSession().getPeerCertificates());
       } else {
-        LOGGER.trace("SSL handshake failed", onHandshake.cause());
+        LOGGER.debug("SSL handshake failed", onHandshake.cause());
         extractedCertificate.completeExceptionally(
             getErrorWithOptionalCause(onHandshake, "Failed to perform SSL handshake"));
       }
