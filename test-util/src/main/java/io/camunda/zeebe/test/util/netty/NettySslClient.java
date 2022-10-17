@@ -30,6 +30,8 @@ import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import org.agrona.LangUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A simple Netty based client which only connects to SSL/TLS secured connections and extracts their
@@ -44,6 +46,8 @@ import org.agrona.LangUtil;
  * reuses this class to perform its assertions.
  */
 public final class NettySslClient {
+  private static final Logger LOGGER = LoggerFactory.getLogger(NettySslClient.class);
+
   private final SslContext sslContext;
 
   public NettySslClient(final SslContext sslContext) {
@@ -80,21 +84,23 @@ public final class NettySslClient {
     final var executor = new NioEventLoopGroup(1);
 
     try {
-      final var channel =
+      final var connectFuture =
           new Bootstrap()
               .handler(new SslCertificateExtractor(certificatesFuture))
               .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
               .group(executor)
               .channel(NioSocketChannel.class)
               .connect(address)
-              .addListener(onConnect -> onChannelConnect(address, certificatesFuture, onConnect))
-              .channel();
+              .addListener(onConnect -> onChannelConnect(address, certificatesFuture, onConnect));
+
+      final var channel = connectFuture.channel();
       channel
           .closeFuture()
           .addListener(onClose -> onChannelClose(address, certificatesFuture, onClose));
 
       final Certificate[] certificateChain =
           certificatesFuture.orTimeout(10, TimeUnit.SECONDS).join();
+      connectFuture.sync();
       channel.close().sync();
 
       return certificateChain;
@@ -115,6 +121,9 @@ public final class NettySslClient {
       final var errorMessage =
           String.format("Failed to establish a secure connection to %s", address);
       certificates.completeExceptionally(getErrorWithOptionalCause(onConnect, errorMessage));
+      LOGGER.debug("Failed to connect to {}", address);
+    } else {
+      LOGGER.debug("Connected to {}", address);
     }
   }
 
@@ -128,6 +137,7 @@ public final class NettySslClient {
                 + "extracted",
             address);
     certificates.completeExceptionally(getErrorWithOptionalCause(onClose, errorMessage));
+    LOGGER.trace("Channel to {} closed", address, onClose.cause());
   }
 
   private Throwable getErrorWithOptionalCause(
@@ -189,8 +199,10 @@ public final class NettySslClient {
         final SslHandler sslHandler, final Future<? super Channel> onHandshake)
         throws SSLPeerUnverifiedException {
       if (onHandshake.isSuccess()) {
+        LOGGER.trace("SSL handshake successfully completed");
         extractedCertificate.complete(sslHandler.engine().getSession().getPeerCertificates());
       } else {
+        LOGGER.trace("SSL handshake failed", onHandshake.cause());
         extractedCertificate.completeExceptionally(
             getErrorWithOptionalCause(onHandshake, "Failed to perform SSL handshake"));
       }
