@@ -29,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLPeerUnverifiedException;
+import org.agrona.LangUtil;
 
 /**
  * A simple Netty based client which only connects to SSL/TLS secured connections and extracts their
@@ -94,9 +95,13 @@ public final class NettySslClient {
 
       final Certificate[] certificateChain =
           certificatesFuture.orTimeout(10, TimeUnit.SECONDS).join();
-      channel.close();
+      channel.close().sync();
 
       return certificateChain;
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      LangUtil.rethrowUnchecked(e);
+      return new Certificate[0]; // unreachable
     } finally {
       executor.shutdownGracefully(10, 100, TimeUnit.MILLISECONDS);
     }
@@ -125,10 +130,11 @@ public final class NettySslClient {
     certificates.completeExceptionally(getErrorWithOptionalCause(onClose, errorMessage));
   }
 
-  private Throwable getErrorWithOptionalCause(final Future<?> onClose, final String errorMessage) {
+  private Throwable getErrorWithOptionalCause(
+      final Future<?> operation, final String errorMessage) {
     final Throwable error;
-    if (onClose.cause() != null) {
-      error = new IllegalStateException(errorMessage, onClose.cause());
+    if (operation.cause() != null) {
+      error = new IllegalStateException(errorMessage, operation.cause());
     } else {
       error = new IllegalStateException(errorMessage);
     }
@@ -148,6 +154,7 @@ public final class NettySslClient {
       sslHandler
           .handshakeFuture()
           .addListener(onHandshake -> extractCertificate(sslHandler, onHandshake));
+      sslHandler.sslCloseFuture().addListener(this::onSslClose);
 
       channel.pipeline().addLast("tls", sslHandler);
       channel
@@ -161,6 +168,14 @@ public final class NettySslClient {
                   super.exceptionCaught(ctx, cause);
                 }
               });
+    }
+
+    private void onSslClose(final Future<? super Channel> onSslClose) {
+      if (!onSslClose.isSuccess()) {
+        extractedCertificate.completeExceptionally(
+            getErrorWithOptionalCause(
+                onSslClose, "SSL engine closed before certificates were extracted"));
+      }
     }
 
     private void extractCertificate(
