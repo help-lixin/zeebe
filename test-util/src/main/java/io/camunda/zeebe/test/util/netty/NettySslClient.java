@@ -12,6 +12,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -100,18 +101,20 @@ public final class NettySslClient {
           .closeFuture()
           .addListener(onClose -> onChannelClose(address, certificatesFuture, onClose));
 
-      final Certificate[] certificateChain =
-          certificatesFuture.orTimeout(10, TimeUnit.SECONDS).join();
-      connectFuture.sync();
-      channel.close().sync();
+      return certificatesFuture.orTimeout(10, TimeUnit.SECONDS).join();
+    } finally {
+      LOGGER.debug("Closing temporary executor/channels");
+      closeExecutor(executor);
+    }
+  }
 
-      return certificateChain;
+  private static void closeExecutor(final EventLoopGroup executor) {
+    try {
+      // will close any opened channel
+      executor.shutdownGracefully(10, 100, TimeUnit.MILLISECONDS).sync();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       LangUtil.rethrowUnchecked(e);
-      return new Certificate[0]; // unreachable
-    } finally {
-      executor.shutdownGracefully(10, 100, TimeUnit.MILLISECONDS);
     }
   }
 
@@ -167,6 +170,7 @@ public final class NettySslClient {
           .handshakeFuture()
           .addListener(onHandshake -> extractCertificate(sslHandler, onHandshake));
       sslHandler.sslCloseFuture().addListener(this::onSslClose);
+      sslHandler.setHandshakeTimeoutMillis(5_000);
 
       channel.pipeline().addLast("tls", sslHandler);
       channel

@@ -89,6 +89,7 @@ final class SecureClusteredMessagingIT {
     cluster
         .getGateways()
         .forEach((id, gateway) -> assertAddressIsSecured(id, gateway.getExternalClusterAddress()));
+    LOGGER.debug("Test finished, closing all Docker VMs");
   }
 
   private void configureNode(final ZeebeNode<?> node) {
@@ -111,6 +112,7 @@ final class SecureClusteredMessagingIT {
 
   private void assertAddressIsSecured(final Object nodeId, final String address) {
     final var socketAddress = Address.from(address).socketAddress();
+    LOGGER.debug("Checking if node {} is secured correctly at {}", nodeId, address);
     SslAssert.assertThat(socketAddress)
         .as("node %s is not secured correctly", nodeId)
         .isSecuredBy(certificate);
