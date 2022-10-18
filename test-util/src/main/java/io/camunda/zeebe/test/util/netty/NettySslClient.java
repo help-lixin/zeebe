@@ -88,6 +88,8 @@ public final class NettySslClient {
           new Bootstrap()
               .handler(new SslCertificateExtractor(certificatesFuture))
               .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
+              .option(ChannelOption.AUTO_CLOSE, false)
+              .option(ChannelOption.AUTO_READ, false)
               .group(executor)
               .channel(NioSocketChannel.class)
               .connect(address)
